@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Interactive Canvas</title>
+
+  <!-- Google Fonts Preconnect and Instrument Serif Link -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Alike+Angular&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Instrument Serif', serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      background-color: #f0f0f0;
+    }
+
+button{
+  font-family: 'Instrument Serif', serif;
+}
+
+    .container {
+      display: flex;
+      width: 100%;
+      height: 100%;
+      border: 1px solid #ccc;
+      position: relative;
+    }
+
+    .sticker-palette {
+      width: 20%;
+      height: 100%;
+      background: none;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap:15px;
+      z-index: 2;
+      position: absolute;
+      top: 0;
+      left: 0;
+      overflow-y: auto;
+    }
+
+    .controls {
+      margin-bottom: 10px;
+    }
+
+    .sticker-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 5px;
+    }
+
+    .sticker-grid img {
+      width: 80px;
+      height: 80px;
+      cursor: pointer;
+      transition: border 0.2s ease;
+    }
+
+    .sticker-grid img.selected {
+      border: 2px solid red;
+      box-shadow: 0 0 5px rgba(255, 0, 0, 0.5);
+    }
+
+    .canvas {
+  flex: 1;
+  background-size: cover;  /* Ensures the background image scales to cover the entire canvas */
+  background-position: center;  /* Keeps the image centered */
+  background-repeat: no-repeat;  /* Prevents the background from repeating */
+  position: relative;
+  overflow: hidden;
+}
+
+
+    .canvas img {
+      position: absolute;
+      cursor: move;
+      transform-origin: center;
+    }
+
+    .background-controls {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      display: flex;
+      gap: 5px;
+    }
+
+    .background-controls .bg-btn {
+      padding: 5px 10px;
+      cursor: pointer;
+      border: 1px solid #000;
+      background: none;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 80px;
+      height: 30px;
+      box-sizing: border-box;
+    }
+
+    .bottom-controls {
+      position: absolute;
+      bottom: 10px;
+      left: 10px;
+      display: flex;
+      gap: 10px;
+    }
+
+    .bottom-controls button {
+      padding: 5px 10px;
+      cursor: pointer;
+      border: 1px solid #000;
+      background: none;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 80px;
+      height: 30px;
+      box-sizing: border-box;
+    }
+
+    .undo-save-buttons { 
+      margin-top: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .undo-save-buttons button {
+      display: flex;
+      width: 80px;
+      height: 30px;
+      padding: 10px 10px;
+      justify-content: center;
+      align-items: center;
+      gap: 10px;
+      border: 1px solid #000;
+      background: none;
+      cursor: pointer;
+      font-size: 14px;
+      text-align: center;
+      padding: 0;
+      box-sizing: border-box;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Sticker Palette -->
+    <div class="sticker-palette">
+      <div class="controls">
+        <button id="pack1" class="sync-btn">by human</button>
+        <button id="pack2" class="sync-btn">by nature</button>
+      </div>
+      <div class="sticker-grid" id="stickerGrid"></div>
+      <label for="scale">Scale:</label>
+      <input type="range" id="scale" min="30" max="1000" step="10" value="80">
+      <label for="rotation">Rotate:</label>
+      <input type="range" id="rotation" min="0" max="360" step="1" value="0">
+
+      <!-- Undo and Save buttons inside the palette container -->
+      <div class="undo-save-buttons">
+        <button id="undo" class="sync-btn">Undo</button>
+        <button id="save" class="sync-btn">Save</button>
+      </div>
+    </div>
+
+    <!-- Canvas -->
+    <div class="canvas" id="canvas"></div>
+
+    <!-- Background Controls -->
+    <div class="background-controls">
+      <button class="bg-btn sync-btn" data-bg="images/bg1.jpg">1</button>
+      <button class="bg-btn sync-btn" data-bg="images/bg2-1.jpg">2</button>
+      <button class="bg-btn sync-btn" data-bg="images/bg9.jpg">3</button>
+    </div>
+  </div>
+
+  <script>
+ 	document.addEventListener("DOMContentLoaded", () => {
+      const stickerGrid = document.getElementById("stickerGrid");
+      const canvas = document.getElementById("canvas");
+      const scaleInput = document.getElementById("scale");
+      const rotationInput = document.getElementById("rotation");
+      const undoButton = document.getElementById("undo");
+      const saveButton = document.getElementById("save");
+
+      let currentScale = 80;
+      let currentRotation = 0;
+      let selectedSticker = null;
+      let selectedCanvasSticker = null;
+      const addedStickers = [];
+
+      // Sticker packs
+      const stickers = {
+        pack1: ["images/sticker-1.png", "images/sticker-2.png", "images/sticker-3.png", "images/sticker-4.png", "images/sticker-5.png", "images/sticker-6.png"],
+        pack2: ["images/sticker-7.png", "images/sticker-8.png", "images/sticker-9.png", "images/sticker-10.png", "images/sticker-11.png", "images/sticker-12.png"]
+      };
+
+      // Load stickers
+      const loadStickers = (pack) => {
+        stickerGrid.innerHTML = "";
+        stickers[pack].forEach(src => {
+          const img = document.createElement("img");
+          img.src = src;
+          img.draggable = true;
+
+          img.addEventListener("click", () => {
+            if (selectedSticker) {
+              selectedSticker.classList.remove("selected");
+            }
+            selectedSticker = img;
+            selectedSticker.classList.add("selected");
+          });
+
+          img.addEventListener("dragstart", (e) => dragStart(e, src));
+          stickerGrid.appendChild(img);
+        });
+      };
+
+      // Drag Start
+      const dragStart = (e, src) => {
+        e.dataTransfer.setData("src", src);
+        e.dataTransfer.setDragImage(new Image(), 0, 0);
+      };
+
+      // Drag Over
+      canvas.addEventListener("dragover", (e) => e.preventDefault());
+
+   // Update Sticker Scale
+  scaleInput.addEventListener("input", () => {
+    currentScale = parseInt(scaleInput.value, 10);
+
+    // Update size of the selected sticker on the canvas
+    if (selectedCanvasSticker) {
+      selectedCanvasSticker.style.width = `${currentScale}px`;
+      selectedCanvasSticker.style.height = `${currentScale}px`;
+    }
+  });
+
+  // Update Sticker Rotation
+  rotationInput.addEventListener("input", () => {
+    currentRotation = parseInt(rotationInput.value, 10);
+
+    // Update rotation of the selected sticker on the canvas
+    if (selectedCanvasSticker) {
+      selectedCanvasSticker.style.transform = `rotate(${currentRotation}deg)`;
+    }
+  });
+
+  // Drop Sticker on Canvas
+  canvas.addEventListener("drop", (e) => {
+    e.preventDefault();
+    const src = e.dataTransfer.getData("src");
+    if (src) {
+      const img = document.createElement("img");
+      img.src = src;
+      img.style.width = `${currentScale}px`;
+      img.style.height = `${currentScale}px`;
+      img.style.transform = `rotate(${currentRotation}deg)`;
+      img.style.position = "absolute";
+      img.style.left = `${e.offsetX - currentScale / 2}px`;
+      img.style.top = `${e.offsetY - currentScale / 2}px`;
+
+      img.addEventListener("mousedown", (e) => {
+        selectedCanvasSticker = img; // Set the selected sticker
+        startDrag(e, img);
+      });
+
+      canvas.appendChild(img);
+      addedStickers.push(img);
+    }
+  });
+
+  // Dragging Functionality
+  const startDrag = (e, img) => {
+    const offsetX = e.clientX - img.offsetLeft;
+    const offsetY = e.clientY - img.offsetTop;
+
+    const move = (e) => {
+      img.style.left = `${e.clientX - offsetX}px`;
+      img.style.top = `${e.clientY - offsetY}px`;
+    };
+
+    const stopMove = () => {
+      document.removeEventListener("mousemove", move);
+      document.removeEventListener("mouseup", stopMove);
+    };
+
+    document.addEventListener("mousemove", move);
+    document.addEventListener("mouseup", stopMove);
+  };
+
+  // Undo Button
+  undoButton.addEventListener("click", () => {
+    if (addedStickers.length > 0) {
+      const lastSticker = addedStickers.pop();
+      if (lastSticker === selectedCanvasSticker) {
+        selectedCanvasSticker = null; // Deselect if the removed sticker was selected
+      }
+      lastSticker.remove();
+    }
+  });
+
+      // Save Button
+      saveButton.addEventListener("click", () => {
+        html2canvas(canvas).then(canvasImage => {
+          const link = document.createElement("a");
+          link.href = canvasImage.toDataURL();
+          link.download = "canvas-image.png";
+          link.click();
+        });
+      });
+
+      // Background Buttons
+      const bgButtons = document.querySelectorAll(".bg-btn");
+      bgButtons.forEach(button => {
+        button.addEventListener("click", () => {
+          const bgSrc = button.getAttribute("data-bg");
+          canvas.style.backgroundImage = `url(${bgSrc})`;
+        });
+      });
+
+      // Initial Sticker Pack Load
+      loadStickers("pack1");
+
+      // Pack Change
+      const packButtons = document.querySelectorAll(".sync-btn");
+      packButtons.forEach(button => {
+        button.addEventListener("click", () => {
+          const packId = button.id;
+          if (packId === "pack1") {
+            loadStickers("pack1");
+          } else if (packId === "pack2") {
+            loadStickers("pack2");
+          }
+        });
+      });
+    });
+  </script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/0.4.1/html2canvas.min.js"></script>
+</body>
+</html>
